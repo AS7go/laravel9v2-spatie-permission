@@ -28,5 +28,6 @@ Route::get('add-post',[PostController::class, 'create'])->name('add-post');
 Route::post('store-post',[PostController::class, 'store'])->name('store-post');
 Route::get('edit-post/{id}',[PostController::class, 'edit'])->name('edit-post');
 Route::put('update-post/{id}',[PostController::class, 'update'])->name('update-post');
+Route::delete('delete-post/{id}',[PostController::class, 'delete'])->name('delete-post');
 
 require __DIR__ . '/auth.php';

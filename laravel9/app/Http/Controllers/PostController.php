@@ -14,7 +14,7 @@ class PostController extends Controller
 
     public function index()
     {
-        $posts = Post::orderBy('created_at','desc')->get();
+        $posts = Post::orderBy('created_at', 'desc')->get();
 
         return view('dashboard', compact([
             'posts'
@@ -24,15 +24,14 @@ class PostController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'name'=>'required|string|max:255',
-            'text'=>'required|string',
+            'name' => 'required|string|max:255',
+            'text' => 'required|string',
 
         ]);
 
         Post::create($request->all());
 
         return redirect()->back()->with('status', 'Post added!');
-        
     }
 
     public function edit($id)
@@ -44,10 +43,27 @@ class PostController extends Controller
         ]));
     }
 
-    public function update(Post $post, Request $request)
+    public function update($id, Request $request)
     {
-        // return view('edit-new-post', compact([
-        //     'post'
-        // ]));
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'text' => 'required|string',
+
+        ]);
+
+        $post = Post::findOrFail($id);
+
+        $post->update($request->all());
+
+        return redirect()->back()->with('status', 'Post updated!');
+    }
+    
+    public function delete($id)
+    {
+        // $post = Post::findOrFail($id);
+        // $post->delete();
+        Post::findOrFail($id)->delete();
+
+        return redirect()->route('dashboard')->with('status', 'Post deleted!');
     }
 }
