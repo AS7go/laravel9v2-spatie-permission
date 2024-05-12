@@ -26,5 +26,7 @@ Route::get('/', function () {
 Route::get('/dashboard',[PostController::class, 'index'])->middleware(['auth'])->name('dashboard');
 Route::get('add-post',[PostController::class, 'create'])->name('add-post');
 Route::post('store-post',[PostController::class, 'store'])->name('store-post');
+Route::get('edit-post/{id}',[PostController::class, 'edit'])->name('edit-post');
+Route::put('update-post/{id}',[PostController::class, 'update'])->name('update-post');
 
 require __DIR__ . '/auth.php';

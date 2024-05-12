@@ -9,7 +9,7 @@ class PostController extends Controller
 {
     public function create()
     {
-        return view('add-new-article');
+        return view('add-new-post');
     }
 
     public function index()
@@ -33,5 +33,21 @@ class PostController extends Controller
 
         return redirect()->back()->with('status', 'Post added!');
         
+    }
+
+    public function edit($id)
+    {
+        $post = Post::findOrFail($id);
+
+        return view('edit-new-post', compact([
+            'post'
+        ]));
+    }
+
+    public function update(Post $post, Request $request)
+    {
+        // return view('edit-new-post', compact([
+        //     'post'
+        // ]));
     }
 }
