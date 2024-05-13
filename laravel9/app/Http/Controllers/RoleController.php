@@ -11,7 +11,7 @@ class RoleController extends Controller
 {
     public function index()
     {
-        $roles = Role::orderBy('name')->get();
+        $roles = Role::orderBy('name')->where('name', '!=', 'super-user')->get();
 
         return view('roles.index', compact([
             'roles'
@@ -30,15 +30,13 @@ class RoleController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'name'=>'required|max:255',
-            'permissions.*'=>'required|integer|exists:permissions,id',
+            'name' => 'required|max:255',
+            'permissions.*' => 'required|integer|exists:permissions,id',
         ]);
 
         $newRole = Role::create([
-            // создаем роль с названием переданным в $request
-            'name'=>$request->name
+            'name' => $request->name
         ]);
-        //присваиваем все права доступа переменной permissions
         $permissions = Permission::whereIn('id', $request->permissions)->get();
         $newRole->syncPermissions($permissions);
 
@@ -56,15 +54,15 @@ class RoleController extends Controller
         //
     }
 
-    /**
-     * Show the form for editing the specified resource.
-     *
-     * @param  \App\Models\Role  $role
-     * @return \Illuminate\Http\Response
-     */
     public function edit(Role $role)
     {
-        //
+        $role = Role::where('name', '!=', 'super-user')->findOrFail($role->id);
+        $permissions = Permission::orderBy('name')->get();
+
+        return view('roles.edit', compact([
+            'permissions',
+            'role',
+        ]));
     }
 
     /**
@@ -76,7 +74,19 @@ class RoleController extends Controller
      */
     public function update(Request $request, Role $role)
     {
-        //
+        $request->validate([
+            'name' => 'required|max:255',
+            'permissions' => 'required',
+            'permissions.*' => 'required|integer|exists:permissions,id',
+        ]);
+        $role = Role::where('name', '!=', 'super-user')->findOrFail($role->id);
+        $role->update([
+            'name' => $request->name
+        ]);
+        $permissions = Permission::whereIn('id', $request->permissions)->get();
+        $role->syncPermissions($permissions);
+
+        return redirect()->back()->with('status', 'Role updated!');
     }
 
     /**
