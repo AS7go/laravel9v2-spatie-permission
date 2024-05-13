@@ -21,13 +21,13 @@ Route::get('/', function () {
 });
 
 Route::middleware(['auth'])->group(function () {
-    Route::get('/dashboard', [PostController::class, 'index'])->name('dashboard')->middleware('can:show posts');
+    Route::get('/dashboard', [PostController::class, 'index'])->name('dashboard');
     
-    Route::get('add-post', [PostController::class, 'create'])->name('add-post')->middleware('can:add posts');
-    Route::post('store-post', [PostController::class, 'store'])->name('store-post')->middleware('can:add posts');
-    Route::get('edit-post/{id}', [PostController::class, 'edit'])->name('edit-post')->middleware('can:edit posts');
-    Route::put('update-post/{id}', [PostController::class, 'update'])->name('update-post')->middleware('can:edit posts');
-    Route::delete('delete-post/{id}', [PostController::class, 'delete'])->name('delete-post')->middleware('can:delete posts');
+    Route::get('add-post', [PostController::class, 'create'])->name('add-post');
+    Route::post('store-post', [PostController::class, 'store'])->name('store-post');
+    Route::get('edit-post/{id}', [PostController::class, 'edit'])->name('edit-post');
+    Route::put('update-post/{id}', [PostController::class, 'update'])->name('update-post');
+    Route::delete('delete-post/{id}', [PostController::class, 'delete'])->name('delete-post');
     
     
     Route::resource('/roles', RoleController::class);

@@ -14,27 +14,32 @@
                         {{ session('status') }}
                     </div>
                 @endif
-
-                <a href="{{ route('add-post') }}" class="btn btn-outline-success mb-4">Add new post</a>
-
-                @foreach ($posts as $post)
-                    <div class="card mb-4">
-                        <h5 class="card-header">{{ $post->name }}</h5>
-                        <div class="card-body">
-                            <p>{{ $post->created_at }}</p>
-                            <p>{{ $post->text }}</p>
-                            <a href="{{ route('edit-post', $post->id) }}" class="btn btn-outline-primary">Edit</a>
-
-                            <form action="{{ route('delete-post', $post->id) }}" method="POST" style="display: inline-block">
-                                @csrf
-                                @method('DELETE')
-                                <button type="submit" class="btn btn-outline-danger">Delete</button>
-                            </form>
-
+                @if (auth()->user()->can('add posts'))
+                    <a href="{{ route('add-post') }}" class="btn btn-outline-success mb-4">Add new post</a>
+                @endif
+                @if (auth()->user()->can('show posts'))
+                    @foreach ($posts as $post)
+                        <div class="card mb-4">
+                            <h5 class="card-header">{{ $post->name }}</h5>
+                            <div class="card-body">
+                                <p>{{ $post->created_at }}</p>
+                                <p>{{ $post->text }}</p>
+                                @if (auth()->user()->can('edit posts'))
+                                    <a href="{{ route('edit-post', $post->id) }}"
+                                        class="btn btn-outline-primary">Edit</a>
+                                @endif
+                                @if (auth()->user()->can('delete posts'))
+                                    <form action="{{ route('delete-post', $post->id) }}" method="POST"
+                                        style="display: inline-block">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit" class="btn btn-outline-danger">Delete</button>
+                                    </form>
+                                @endif
+                            </div>
                         </div>
-                    </div>
-                @endforeach
-
+                    @endforeach
+                @endif
             </div>
         </div>
     </div>
