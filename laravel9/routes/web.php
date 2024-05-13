@@ -30,7 +30,7 @@ Route::middleware(['auth'])->group(function () {
     Route::delete('delete-post/{id}', [PostController::class, 'delete'])->name('delete-post')->middleware('can:delete posts');
     
     
-    Route::resource('/roles', RoleController::class);
+    Route::resource('/roles', RoleController::class)->middleware('role:super-user');
 });
 
 // Route::get('/dashboard', function () {
