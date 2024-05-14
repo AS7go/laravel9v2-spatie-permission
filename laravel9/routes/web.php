@@ -4,6 +4,7 @@ use App\Http\Controllers\PostController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RoleController;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\UserController;
 
 /*
 |--------------------------------------------------------------------------
@@ -30,7 +31,8 @@ Route::middleware(['auth'])->group(function () {
     Route::delete('delete-post/{id}', [PostController::class, 'delete'])->name('delete-post')->middleware('can:delete posts');
     
     
-    Route::resource('/roles', RoleController::class)->middleware('role:super-user');
+    Route::resource('roles', RoleController::class)->middleware('role:super-user');
+    Route::resource('users', UserController::class)->middleware('role:super-user');
 });
 
 // Route::get('/dashboard', function () {

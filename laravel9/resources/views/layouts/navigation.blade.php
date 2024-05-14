@@ -19,6 +19,9 @@
                         <x-nav-link :href="route('roles.index')" :active="request()->routeIs('roles.index')">
                             Roles
                         </x-nav-link>
+                        <x-nav-link :href="route('users.index')" :active="request()->routeIs('users.index')">
+                            Users
+                        </x-nav-link>
                     @endrole
                 </div>
             </div>
