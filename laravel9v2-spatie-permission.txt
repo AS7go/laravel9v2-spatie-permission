@@ -1,0 +1,1722 @@
+Делал для себя Исключительно в образовательных целях - Претензии, критика и тд. не принимаются.
+Мои Заметки по проекту, возможны неточности и ошибки !!! У меня все работает! Laravel v9.52.16 (PHP v8.2.18)
+
+Использовал контейнеризацию 
+docker-compose ps
+NAME                COMMAND                  SERVICE             STATUS              PORTS
+PHP1                "docker-php-entrypoi…"   webserver           running             0.0.0.0:8000->80/tcp, :::8000->80/tcp
+mysql1              "docker-entrypoint.s…"   mysqldb             running             0.0.0.0:3306->3306/tcp, :::3306->3306/tcp, 33060/tcp
+phpmyadmin1         "/docker-entrypoint.…"   phpmyadmin          running             0.0.0.0:8081->80/tcp, :::8081->80/tcp
+
+docker -v
+Docker version 26.1.2, build 211e74b
+
+docker-compose -v
+Docker Compose version v2.12.2
+
+Файлы настроек, конфигурации (Dockerfile, docker-compose.yml)  описания laravel9v2-spatie-permission.txt, база данных ale3.sql, 
+ссылка на видео - первоисточник есть на гите
+
+Видео первоисточник канал - Grapes, за что огромное спасибо!
+Создаем систему управления ролями пользователей на Laravel 9. Spatie laravel-permission
+https://www.youtube.com/watch?v=Cl0KKlkwmdc&list=PLze7bMjv1CYuFDzbuKwSqo9ZfdiScyYX7&index=6
+
+=== Дополнительно - очистка от старых проектов Docker ===
+++++++++++++++++++++++++++++++++
+	ЭФФЕКТИВНО УДАЛЯЕТ мусор от образов и образы, если забивается винт и кэш
+	 
+	посмотреть статистику
+docker system df
+
+	1.Очистка неиспользуемых образов:
+docker image prune -a
+
+	2.Очистка неиспользуемых контейнеров:
+docker container prune
+
+	3.Очистка неиспользуемых томов (локальных томов данных):
+docker volume prune
+
+	4.Очистка кэша сборки:
+docker builder prune
+
+	посмотреть статистику
+docker system df
+===================================================================
+===================================================================
+
+============ v2 laravel9v2-spatie-permission ==================
+
+1.
+mkdir laravel9v2-spatie-permission
+
+2.
+cd laravel9/
+
+3.
+composer create-project laravel/laravel:^9.0 laravel9
+
+4.
+	~/projects/laravel9v2-spatie-permission$
+cd laravel9/
+
+5.
+	~/projects/laravel9v2-spatie-permission/laravel9$ 
+php artisan serve
+
+   INFO  Server running on [http://127.0.0.1:8000].  
+
+  Press Ctrl+C to stop the server
+
+  2024-05-10 11:57:08 .................................................................................... ~ 0s
+6. 
+	выход
+Ctrl+C
+
+7.
+Вводим в терминале команду hostname получаем свой хост (у меня это E7240) 
+/laravel9$ hostname
+E7240
+--------------
+в настройках .env вводим данные по базе с файла docker-compose.yml
+--- .env
+DB_CONNECTION=mysql
+DB_HOST=mysqldb # <- контейнер с БД(База Данных)
+# DB_HOST=E7240 # <-это для запуска миграций в контейнере, E7240-хост компьютера 
+DB_PORT=3306
+DB_DATABASE=ale3
+DB_USERNAME=root
+DB_PASSWORD=secret
+
+8.
+создаем файл laravel.log
+в папке laravel9/storage/logs/laravel.log
+
+9.
+	переход с подкаталога в каталог командой (cd ..)
+~/projects/laravel9v2-spatie-permission/laravel9$ cd ..
+~/projects/laravel9v2-spatie-permission$ 
+---
+
+
+В каталоге ~/projects/laravel9v2-spatie-permission/
+Создаем файлы --- docker-compose.yml и Dockerfile
+
+--- строки комментируем, иначе ошибка с БД на этапе создания контейнера с БД
+      # MYSQL_USER: root 
+  	  # MYSQL_PASSWORD: secret 
+
+--- Файл docker-compose.yml
+
+version: '3.9'
+services:
+  webserver:
+    container_name: PHP1
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ./laravel9:/var/www/html
+    ports:
+      - 8000:80
+    depends_on:
+      - mysqldb
+
+  mysqldb:
+    container_name: mysql1
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: secret
+      MYSQL_DATABASE: ale3
+      # MYSQL_USER: root
+      # MYSQL_PASSWORD: secret
+    volumes:
+      - ./laravel9/mysql-data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+
+  phpmyadmin:
+    container_name: phpmyadmin1
+    image: phpmyadmin/phpmyadmin
+    depends_on:
+      - mysqldb
+    ports:
+      - "8081:80"
+    environment:
+      PMA_HOST: mysqldb
+      MYSQL_ROOT_PASSWORD: secret 
+
+
+--- Файл Dockerfile
+
+# Использовать официальный образ PHP с предустановленным Apache
+FROM php:8.2-apache
+
+# Обновление пакетного менеджера и установка MySQL клиента
+RUN apt-get update && apt-get install -y default-mysql-client
+
+# Установить PDO и PDO MySQL расширения PHP
+RUN docker-php-ext-install pdo pdo_mysql \
+    && docker-php-ext-enable pdo_mysql
+
+# Включить модули Apache
+RUN a2enmod rewrite
+
+# Установить рабочий каталог в /var/www/html
+WORKDIR /var/www/html
+
+# Скопировать каталог вашего проекта Laravel # Копирует все содержимое текущего каталога
+COPY ../laravel9 . 
+
+# Установить Composer (если еще не установлен)
+RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+
+# Установить зависимости проекта
+# RUN composer install <- это не обязательно т.к. все с локальной папки проекта копируется в контейнер
+
+# Настроить разрешения для каталогов storage и bootstrap/cache
+RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
+
+# Открыть порт (при необходимости изменить)
+EXPOSE 80
+
+# Использовать Apache в качестве точки входа по умолчанию
+CMD ["apache2-foreground"]
+
+
+10.
+	переход в подкаталог с именем (laravel9) командой (cd laravel9/)
+~/projects/laravel9v2-spatie-permission$ cd laravel9/
+~/projects/laravel9v2-spatie-permission/laravel9$ 
+---
+
+	Даем разрешения и права доступа на папки и файлы рекурсивно
+sudo chmod 777 -R storage/
+	на запрос - вводим пароль
+sudo chmod 777 -R bootstrap/cache
+ 
+11. 
+--- +++ 
+	командой создаем и запускаем контейнеры в фоновом режиме -d 
+docker-compose up --build -d
+
+		дополнительно - обычный запуск 
+	docker-compose up -d
+		останов
+	docker-compose down
+---
+
+12. 
+	Даем права доступа папке mysql-data и файлам по пути laravel9/mysql-data
+sudo chmod -R 777 mysql-data
+
+15.
+------------------------------------------------
+	После запуска контейнера доступ к сайту по адресу
+http://localhost:8000/public/	
+	будет работать,	а для настройки адреса
+http://localhost:8000
+	нужно создаем файл .htaccess в ~/projects/laravel9v2-spatie-permission/laravel9/
+-----
+# run laravel/public/index.php
+
+<IfModule mod_rewrite.c>
+    Options -MultiViews
+    RewriteEngine On
+    RewriteCond %{REQUEST_URL} !^/public/
+    RewriteRule ^(.*)$ /public/$1 [L,QSA]
+</IfModule>
+
+# run laravel/index.php
+
+# RewriteEngine On
+# RewriteCond %{REQUEST_FILENAME} !-f
+# RewriteCond %{REQUEST_FILENAME} !-d
+# RewriteRule ^(.*)$ index.php [QSA,L]
+	
+-------------------------------------------
+===============================================================================================================
+!!! ЭТО ДЕЛАТЬ НЕ ОБЯЗАТЕЛЬНО
+если нужно проверить создание таблицы, подключение, запись и чтение БД
+меняем файл в папке laravel9/.htaccess так
+---
+
+# run laravel/public/index.php
+
+# <IfModule mod_rewrite.c>
+#     Options -MultiViews
+#     RewriteEngine On
+#     RewriteCond %{REQUEST_URL} !^/public/
+#     RewriteRule ^(.*)$ /public/$1 [L,QSA]
+# </IfModule>
+
+# run laravel/index.php
+
+RewriteEngine On
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ index.php [QSA,L]
+
+--- 
+
+это позволит запускать index.php с корня laravel9 по 
+http://localhost:8000
+
+создаем файл index.php в корне laravel9 
+laravel9/index.php
+
+=== Файл index.php !!! только для проверки связи создания записи удаления таблицы в БД ===++++++++++++++++++++
+--- После тестирования удаляем таблицу из БД пунктом меню - Удалить таблицу или SQL запросом ниже
+
+<?php
+// Этот файл для теста связи с базой данных, записи и чтения !!! создаст таблицу testuser
+// SQL запрос на полное удаление таблицы 'testuser' с базы данных 'ale3'
+// DROP TABLE `ale3`.`testuser`;
+// Заход в БД http://localhost:8081
+// Пользователь: root
+// Пароль: secret
+
+$host = 'mysqldb'; // Используем имя сервиса контейнера MySQL из docker-compose.yml
+$db = 'ale3'; // Указываем имя базы данных
+$user = 'root';
+$pass = 'secret';
+$table = 'testuser';
+
+echo "!!! Проверка-тест связи с Базой Данных (http://localhost:8081)<br>Пользователь: root <br> Пароль: secret<br>";
+echo 'Ссылка на БД в контейнере Docker -> <a href="http://localhost:8081">phpMyAdmin</a><br><br>';
+echo "Если нет ошибки, то есть соединение с БД -> $db<br>";
+
+try {
+    $pdo = new PDO("mysql:host=$host;dbname=$db", $user, $pass);
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+} catch (PDOException $e) {
+    echo 'Ошибка соединения с БД ' . $e->getMessage();
+    die();
+}
+
+// Запрос для создания таблицы и заполнение
+$queryCreateTable = "
+SET NAMES utf8;
+SET time_zone = '+02:00';
+SET foreign_key_checks = 0;
+SET sql_mode = 'NO_AUTO_VALUE_ON_ZERO';
+
+SET NAMES utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `$table` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `name` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
+  `email` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
+  `flag` int DEFAULT '0',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+INSERT INTO `$table` (`name`, `email`, `flag`) VALUES
+('name1', 'name1@gmail.com', 1),
+('name2', 'name2@gmail.com', 1),
+('name3', 'name3@gmail.com', 1);
+";
+
+// Функция для выполнения запроса
+function executeQuery($pdo, $query, $successMessage) {
+    try {
+        $pdo->exec($query);
+        echo $successMessage;
+    } catch (PDOException $e) {
+        echo 'Ошибка при выполнении запроса: ' . $e->getMessage();
+    }
+}
+
+// Создание таблицы
+echo '<a href="?action=create_table">Создать тестовую таблицу, заполнить, показать данные</a><br>';
+
+// Показать содержимое таблицы
+echo '<a href="?action=show_table">Показать содержимое таблицы</a><br>';
+
+// Удаление таблицы
+echo '<a href="?action=delete_table">Удалить таблицу</a><br>';
+
+// Обработка действий
+if (isset($_GET['action'])) {
+    switch ($_GET['action']) {
+        case 'create_table':
+            executeQuery($pdo, $queryCreateTable, "<br>Таблица -> $table успешно создана и заполнена данными.<br><br>");
+            // break; //закомментировано<-что бы сразу создать и показывать, но показывать - можно вызывать отдельно, от создать
+        case 'show_table':   
+            $queryShowTable = "SELECT id, name, email FROM $table";
+            $stmt = $pdo->query($queryShowTable);
+            while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                echo $row['name'] . ' - ' . $row['email'] . '<br>';
+            }
+            break;
+        case 'delete_table':
+            $queryDeleteTable = "DROP TABLE `$table`";
+            executeQuery($pdo, $queryDeleteTable, "Таблица -> $table успешно удалена.<br>");
+            break;
+        default:
+            echo 'Неверное действие';
+    }
+
+}
+?>
+
+==============================+++++++++++++++
+
+----- SQL запрос на полное удаление таблицы testuser с базы данных ale3
+DROP TABLE `ale3`.`testuser`;
+-----
+
+после проверки подключения к БД(база данных)
+не забыть поменять файл laravel9/.htaccess как было изначально с перенаправлением на 
+# run laravel/public/index.php
+
+<IfModule mod_rewrite.c>
+    Options -MultiViews
+    RewriteEngine On
+    RewriteCond %{REQUEST_URL} !^/public/
+    RewriteRule ^(.*)$ /public/$1 [L,QSA]
+</IfModule>
+
+# run laravel/index.php
+
+# RewriteEngine On
+# RewriteCond %{REQUEST_FILENAME} !-f
+# RewriteCond %{REQUEST_FILENAME} !-d
+# RewriteRule ^(.*)$ index.php [QSA,L]
+
+===============================================================================================================
+-------------------------------------------
+
+16.
+	создать символическую ссылку для доступа к папке storage
+php artisan storage:link 
+
+
+17.
+	Для локального компьютера с используете Laravel и Apache, рекомендуется установить разрешения для каталогов mysql-data, storage и bootstrap/cache
+	мы сделали так (aleksandr:www-data) второй вариант пока не используем !!!(www-data:www-data)
+sudo chown -R aleksandr:www-data mysql-data
+sudo chown -R aleksandr:www-data storage
+sudo chown -R aleksandr:www-data bootstrap/cache
+	а в Dockerfile задаем так
+RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
+
+	получить данные о владельце, группе командой: ls -l имя_файла_каталога
+	пример в контейнере
+root@168b9521c58b:/var/www/html# ls -l storage
+total 12
+drwxrwxrwx 3 1000 www-data 4096 Jan 31  2023 app
+drwxrwxrwx 6 1000 www-data 4096 Jan 31  2023 framework
+drwxrwxrwx 2 1000 www-data 4096 May 10 09:08 logs
+
+	пример на локальном
+~/projects/laravel9v2-spatie-permission/laravel9$ ls -l storage
+итого 12
+drwxrwxrwx 3 aleksandr www-data 4096 янв 31  2023 app
+drwxrwxrwx 6 aleksandr www-data 4096 янв 31  2023 framework
+drwxrwxrwx 2 aleksandr www-data 4096 мая 10 12:08 logs
+
+18. Вход в контейнер, если понадобится +++
+
+docker exec -it PHP1 bash
+	установка файл-менеджера(для просмотра файлов) в контейнер, не обязательно
+root@e02504415425:/var/www/html# apt install mc
+	запуск менеджера файлов
+mc 
+
+19. Установка совместимой версии админки в laravel 9
+! --- выдало ошибки  не совместимости версий	
+! composer require laravel/breeze --dev
+
+	+++ установил версию ниже
+composer require laravel/breeze:^1.8 
+php artisan breeze:install
+	
+	--- Пошла установка с запросами выбрал Да = темная тема, Нет = PHPUnit
+~/projects/laravel9-spatie-permission/laravel9$ php artisan breeze:install
+
+  Which stack would you like to install?
+  blade ........................ 0  
+  react ........................ 1  
+  vue .......................... 2  
+  api .......................... 3  
+❯ 0
+
+  Would you like to install dark mode support? (yes/no) [no]
+❯ no
+
+  Would you prefer Pest tests instead of PHPUnit? (yes/no) [no]
+❯ no
+
+   INFO  Installing and building Node dependencies. 
+
+added 142 packages, and audited 143 packages in 17s
+
+36 packages are looking for funding
+  run `npm fund` for details
+
+found 0 vulnerabilities
+npm notice 
+npm notice New minor version of npm available! 10.5.0 -> 10.7.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v10.7.0
+npm notice Run npm install -g npm@10.7.0 to update!
+npm notice 
+
+> build
+> vite build
+
+vite v4.5.3 building for production...
+✓ 51 modules transformed.
+public/build/manifest.json              0.26 kB │ gzip:  0.14 kB
+public/build/assets/app-2f560e8f.css   27.31 kB │ gzip:  5.40 kB
+public/build/assets/app-31d6f2fa.js   146.81 kB │ gzip: 54.35 kB
+✓ built in 4.88s
+
+   INFO  Breeze scaffolding installed successfully.  
+ 
+
+20.
+	при http://localhost:8000/
+	Выдало ошибку 
+file_put_contents(/var/www/html/storage/framework/views/d21bc1965d8c501e5e18921c4eb8ea6ec1e5686e.php): Failed to open stream: Permission denied
+
+	+++ Разрешаем доступ - ошибка исчезла 
+sudo chmod 777 -R storage/
+
+21. 
+	По документации https://laravel.com/docs/9.x/starter-kits
+ --- npm install - запускать если не установленно. Повторный запуск ничего не дал (в моем случае - необязательно) 
+ --- php artisan migrate -запустим после установки Spatie
+ 
+Запускаем npm run dev
+
+ ~/projects/laravel9v2-spatie-permission/laravel9$ npm run dev
+получаем
+> dev
+> vite
+
+
+  VITE v4.5.3  ready in 403 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose
+  ➜  press h to show help
+
+  LARAVEL v9.52.16  plugin v0.7.8
+
+  ➜  APP_URL: http://localhost
+  
+просмотр результата разработки по http://localhost:5173/
+
+выход Ctrl + c
+
+
+22. 
+cd ..
+Все с гитом делаем в каталоге ~/projects/laravel9v2-spatie-permission$
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+=======================================================================
+	подключение git
+	/projects/laravel9v2-spatie-permission$ 
+git init
+git status
+	Текущая ветка: master
+	переименовать master в main
+git branch -m master main
+git status
+	выдаст Текущая ветка: main
+	
+	вводим свои настройки
+git config user.email "sh17aleksandr@gmail.com"
+git config user.name "Aleksandr" 
+
+	в laravel9/.gitignore 
+	добавляем папку 
+/mysql-data
+	
+git add .
+git commit -m '1'
+
+
++++ создаем репозиторий на гите laravel9v2-spatie-permission
+	запускаем это 
+git remote add origin git@github.com:AS7go/laravel9v2-spatie-permission.git
+git branch -M main
+git push -u origin main
+
+	--- Это дополнительная информация с гита - как делать для подключения  -----
+	--- использовать, то что нужно - свой гит и свои настройки - это просто пример ---
+	Quick setup — if you’ve done this kind of thing before
+	git@github.com:AS7go/laravel9v2-spatie-permission.git
+	Get started by creating a new file or uploading an existing file. We recommend every repository include a README, LICENSE, and .gitignore.
+
+	…or create a new repository on the command line
+	echo "# laravel9v2-spatie-permission" >> README.md
+	git init
+	git add README.md
+	git commit -m "first commit"
+	git branch -M main
+	git remote add origin git@github.com:AS7go/laravel9v2-spatie-permission.git
+	git push -u origin main
+
+	---
+	…or push an existing repository from the command line
+	git remote add origin git@github.com:AS7go/laravel9v2-spatie-permission.git
+	git branch -M main
+	git push -u origin main
+------------------------------------------------------
+=======================================================================
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+
+23.
+Документация по spatie -> https://spatie.be/docs/laravel-permission/v5/installation-laravel
+cd /laravel9
+	Все с Ларавел делаем в каталоге ~/projects/laravel9v2-spatie-permission/laravel9$
+
+composer require spatie/laravel-permission:^5.8
+
+	добавило строку "spatie/laravel-permission": "^5.8" в laravel9/composer.json
+24.
+Добавить в файл config/app.php в раздел providers строку  Spatie\Permission\PermissionServiceProvider::class,
+
+'providers' => [
+    // ...
+    Spatie\Permission\PermissionServiceProvider::class,
+];
+
+--- You should publish the migration and the config/permission.php config file with:
+php artisan vendor:publish --provider="Spatie\Permission\PermissionServiceProvider"
+
+--- Очистка ++++
+
+
+php artisan optimize:clear
+ 
+php artisan config:clear
+
+
+ 
+25.
+DB_CONNECTION=mysql
+# DB_HOST=mysqldb # для работы сайта в контейнере
+DB_HOST=E7240 # для миграции
+DB_PORT=3306
+DB_DATABASE=ale3
+DB_USERNAME=root
+DB_PASSWORD=secret
+
+26.
+	если не поменять в laravel9/.env -> DB_HOST=mysqldb на DB_HOST=E7240 то при миграции выдаст ошибку 
+	SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for mysqldb failed: Temporary failure 
+	in name resolution (SQL: select * from information_schema.tables where table_schema = ale3 and 
+	table_name = migrations and table_type = 'BASE TABLE')
+---
+	Запускаем миграцию
+php artisan migrate
+
+~/projects/laravel9v2-spatie-permission/laravel9$ php artisan migrate
+
+   INFO  Preparing database.  
+
+  Creating migration table ............................................................................ 205ms DONE
+
+   INFO  Running migrations.  
+
+  2014_10_12_000000_create_users_table ................................................................ 205ms DONE
+  2014_10_12_100000_create_password_resets_table ...................................................... 264ms DONE
+  2019_08_19_000000_create_failed_jobs_table .......................................................... 136ms DONE
+  2019_12_14_000001_create_personal_access_tokens_table ............................................... 381ms DONE
+  2024_05_10_192139_create_permission_tables ........................................................ 2,119ms DONE
+
+---
+	меняем обратно в файле laravel9/.env для работы сайта в контейнере. 
+DB_HOST=mysqldb
+# DB_HOST=E7240	
+
+27.
+	создаем модель и миграцию командой
+php artisan make:model Post -m
+
+~/projects/laravel9v2-spatie-permission/laravel9$ php artisan make:model Post -m
+
+   INFO  Model [app/Models/Post.php] created successfully.  
+
+   INFO  Migration [database/migrations/2024_05_10_200121_create_posts_table.php] created successfully.
+28.
+	Делаем изменения в файле laravel9/database/migrations/2024_05_10_200121_create_posts_table.php
+---
+	+++ проводим миграцию не меняя файл .env 	
+	+++ Это переопределит значение DB_HOST только для текущей сессии выполнения команды php artisan migrate, не затрагивая другие процессы или переменные окружения.
+DB_HOST=E7240 php artisan migrate
+
+
+29.
+php artisan make:seeder CreateSuperUserSeeder
+
+   INFO  Seeder [database/seeders/CreateSuperUserSeeder.php] created successfully.
+
+30.
+Данные для входа при регистрации 
+  Admin
+  
+  admin@gmail.com
+  12345678
+
+31.
+
+Запросы SQL в phpMyAdmin для установки состветствия времени в контейнереи и реального - НЕ помогло, нужно разбираться 
+при добавлении в .env строки APP_TIMEZONE=Europe/Kyiv и престартовке с пересборкой дало разброс в 6 часов
+
+SET GLOBAL time_zone = '+03:00'; <-это сбросило после docker-compose down ---и--- docker-compose up --build -d
+SELECT @@session.time_zone AS 'Текущий часовой пояс';
+SELECT NOW();
+
+32.
+	запускаем так 
+DB_HOST=E7240 php artisan db:seed --class=CreateSuperUserSeeder
+---	
+	или меняем в .env  
+DB_HOST=mysqldb
+# DB_HOST=E7240	
+	на
+# DB_HOST=mysqldb
+DB_HOST=E7240 
+	и запускаем без указания DB_HOST=E7240 в
+php artisan db:seed --class=CreateSuperUserSeeder
+---
+(	выбран был этот вариант 
+DB_HOST=E7240 php artisan db:seed --class=CreateSuperUserSeeder
+)
+--- действие добавило в таблицы 
+	users
+1 Admin admin@gmail.com NULL
+	roles	
+1 super-user web
+	model_has_roles
+role_id | model_type      | model_id
+1       | App\Models\User | 1
+
+33.
+Подключение bootstrap 4.6.2 laravel9/resources/views/layouts/app.blade.php
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css" integrity="sha384-xOolHFLEh07PJGoPkLv1IbcEPTNtaed2xpHsD9ESMhqIYd0nLMwNLD69Npy4HI+N" crossorigin="anonymous">
+
+34.
+!!! Это сделано что бы не путаться с маршрутами и профайлами, цель урока Spatie permissions roles
+
+	Без меню profile закоментированны строки 37-39 83-85 с маршрутами href="route('profile.edit')" в файле
+laravel9/resources/views/layouts/navigation.blade.php
+
+исходник - laravel9/resources/views/layouts/navigation with profile 37 83.blade copy.php
+
+	Закомментированы или убраны маршруты в laravel9/routes/web.php
+// Без меню profile в файле laravel9/resources/views/layouts/navigation.blade.php 
+// убрать пути href="route('profile.edit')" в строках 37-39 83-85 
+
+// Route::get('/dashboard', function () {
+//     return view('dashboard');
+// })->middleware(['auth', 'verified'])->name('dashboard');
+
+// Route::middleware('auth')->group(function () {
+//     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
+//     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
+//     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+// });
+	
+35.
+Объяснение принципа 
+Route::view('1add-article','add-new-article')->name('222add-article');
+
+1add-article-маршрут(http://localhost:8000/1add-article), 
+add-new-article-представление страницы(add-new-article.blade.php) вызванное по маршруту 1add-article, 
+222add-article-вызов по имени при нажатии на кнопку <a href="{{route('222add-article')}}" class="btn btn-success mb-4">Add new article</a>
+
+
+Итак, при нажатии на кнопку "Add new article", Laravel будет использовать имя маршрута "222add-article" для генерации URL-адреса, который будет ссылаться на маршрут "/1add-article". 
+(http://localhost:8000/1add-article)
+При этом будет загружено представление "add-new-article" и пользователь увидит страницу "add-new-article.blade.php" 
+из каталога "/resources/views/add-new-article.blade.php".
+
+
+36.
+php artisan make:controller PostController
+
+   INFO  Controller [app/Http/Controllers/PostController.php] created successfully.
+
+37.
+
+https://laravel.com/docs/9.x/validation#quick-displaying-the-validation-errors
+
+В моделе Post.php - laravel9/app/Models/Post.php указываем поля для заполнения 
+
+    protected $fillable = [
+        'name',
+        'text'
+    ];
+    
+---    
+в контроллере PostController.php - laravel9/app/Http/Controllers/PostController.php
+
+use App\Models\Post;
+
+    public function store(Request $request)
+    {
+        $request->validate([
+            'name'=>'required|string|max:255',
+            'text'=>'required|string',
+
+        ]);
+
+        Post::create($request->all());
+
+        return redirect()->back();
+    }
+---
+По документации laravel https://laravel.com/docs/9.x/responses#redirecting-with-flashed-session-data
+
+laravel9/resources/views/add-new-article.blade.php
+
+@if (session('status'))
+    <div class="alert alert-success">
+        {{ session('status') }}
+    </div>
+@endif
+
+---
+laravel9/app/Http/Controllers/PostController.php
+
+//return redirect('dashboard')->with('status', 'Profile updated!');
+return redirect()->back()->with('status', 'Post added!');
+  
+38.
+Defining a Super-Admin
+https://spatie.be/docs/laravel-permission/v5/basic-usage/super-admin
+
+
+39.
+в файле laravel9/app/Providers/AuthServiceProvider.php
+по документации https://spatie.be/docs/laravel-permission/v5/basic-usage/super-admin
+
+use Illuminate\Support\Facades\Gate;
+
+        Gate::before(function ($user, $ability) {
+            return $user->hasRole('Super Admin') ? true : null;
+        });
+
+по итогу
+    public function boot()
+    {
+        $this->registerPolicies();
+
+        Gate::before(function ($user, $ability) {
+            return $user->hasRole('super-user') ? true : null;
+        });
+    }
+
+
+40.
+добавили группу для роутов 
+Route::middleware(['auth'])->group(function () {
+    Route::get('/dashboard', [PostController::class, 'index'])->name('dashboard');
+    Route::get('add-post', [PostController::class, 'create'])->name('add-post');
+    Route::post('store-post', [PostController::class, 'store'])->name('store-post');
+    Route::get('edit-post/{id}', [PostController::class, 'edit'])->name('edit-post');
+    Route::put('update-post/{id}', [PostController::class, 'update'])->name('update-post');
+    Route::delete('delete-post/{id}', [PostController::class, 'delete'])->name('delete-post');
+});
+
+http://localhost:8000/dashboard
+
+admin@gmail.com
+12345678
+
+php artisan optimize:clear
+
+
+41.
+документация https://spatie.be/docs/laravel-permission/v5/basic-usage/role-permissions
+создаем роль для пользователя, которая будет по умолчанию при регистрации
+
+laravel9/app/Http/Controllers/Auth/RegisteredUserController.php
+
+	+-45 строка добавляем 
+$user->assignRole('user');
+	перед
+event(new Registered($user));
+
+
+40.
+роль можно создать через сидер или через команду
+https://spatie.be/docs/laravel-permission/v5/basic-usage/artisan
+
+через команду - у меня так, что бы заработало в контейнере
+DB_HOST=E7240 php artisan permission:create-role user
+
+(пример 
+~/projects/laravel9v2-spatie-permission/laravel9$ DB_HOST=E7240 php artisan permission:create-role user
+Role `user` created)
+
+в базу данных roles добавилось 
+user web 2024-05-13 12:01:24 2024-05-13 12:01:24
+
+
+
+(!!! это у меня, у Васа может быть по другому) если запустить так
+php artisan permission:create-role user
+	то выдаст ошибку
+SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for mysqldb failed: Temporary failure in name resolution (SQL: select * from `roles` where `name` = user and `guard_name` = web limit 1)
+
+Таким образом, команда php artisan permission:create-role user добавляет новую роль 'user' в ваше приложение Laravel, включая соответствующие записи в базе данных и обновления в коде, связанные с ролями и разрешениями.
+41. 
+ОТСТУПЛЕНИЕ
+	вход в контейнер командой 
+docker exec -it PHP1 bash
+	выход 
+exit
+--- для легкой навигации можно установить файл-менеджер в контейнере, не обязательно
+root@e02504415425:/var/www/html# apt install mc
+	запуск менеджера файлов
+mc 
+---
+
+PHP1-имя контейнера в docker-compose.yml (container_name: PHP1) или узнать командой docker-compose ps
+
+фыйлы .env в контейнере и на локальном компьютере одинаковые
+а hostname разный, в контейнере
+root@a8536b231f1c:/var/www/html# hostname
+a8536b231f1c
+
+на локальном компьютере
+hostname
+E7240
+
+но для связи с БД мы используем
+ mysqldb:
+    container_name: mysql1
+    image: mysql:8.0
+    
+и его DB_HOST=mysqldb задоем в .env
+
+42.
+Вход как Админ, он же супер юзер
+http://localhost:8000/dashboard
+
+admin@gmail.com
+12345678
+
+Выходим Log Out и регистрируемся как пользователь Register
+
+test
+test@gmail.com
+12345678
+-------------
+	В таблице -> roles 
+id | name       | guard_name | created_at          | updated_at
+-------------------------------------------------------------------------	
+1  | super-user | web        | 2024-05-10 18:45:29 | 2024-05-10 18:45:29
+	добавилось
+2  | user       | web        | 2024-05-13 12:01:24 | 2024-05-13 12:01:24
+
+	В таблице -> model_has_roles
+role_id | model_type        | model_id
+--------------------------------------
+1       | App\Models\User   | 1
+	добавилось
+2       | App\Models\User   | 2
+
+user с id 2 (roles) - имеет роль с role_id 2 (model_has_roles) model_id 2
+
+---
+В таблице roles:
+Добавлена новая роль с именем 'user' (name), которая относится к стандартной охранной зоне 'web' (guard_name).
+Время создания (created_at) и обновления (updated_at).
+В таблице model_has_roles:
+Добавлена новая связь между ролью и моделью пользователя.
+Роль 'user' (с идентификатором 2) связана с моделью пользователя App\Models\User (model_type) с идентификатором 2 (model_id).
+---
+
+Таким образом, эти записи указывают на то, что пользователь с идентификатором 2 (model_id) связан с ролью 'user', что позволяет определить его роль в системе доступа к вашему приложению.
+--------------
+
+43.
+К определенной роль нужно добавлять права доступа, иначе только Админ(super - user) сможет делать все
+Добавим права доступа по умолчанию - только просмотр
+
+
+права доступа 
+добавление
+просмотр 
+редактирование 
+удаление
+44.
+	~/projects/laravel9v2-spatie-permission/laravel9$
+php artisan make:controller RoleController --resource --model=Role
+
+  A App\Models\Role model does not exist. Do you want to generate it? (yes/no) [yes]
+❯ no
+
+   INFO  Controller [app/Http/Controllers/RoleController.php] created successfully. 
+45.
+Добавляем пункт меню в строка 13 <!-- Navigation Links --> 
+laravel9/resources/views/layouts/navigation.blade.php
+
+строка +-19
+<div class="hidden space-x-8 sm:-my-px sm:ml-10 sm:flex">
+	<x-nav-link :href="route('roles.index')" :active="request()->routeIs('roles.index')">
+		Roles
+	</x-nav-link>
+</div>
+
+46.
+в laravel9/routes/web.php создаем маршрут. Описание ниже и тут https://laravel.com/docs/9.x/controllers#resource-controllers
+
+Route::resource('/roles', [RoleController::class]); создает семь стандартных маршрутов для управления ролями в вашем приложении Laravel. Эти маршруты автоматически сопоставляются с методами в вашем контроллере RoleController. Вот какие маршруты создаются:
+
+GET /roles: Маршрут для отображения списка ролей. Он вызывает метод index() в RoleController.
+GET /roles/create: Маршрут для отображения формы создания новой роли. Он вызывает метод create() в RoleController.
+POST /roles: Маршрут для сохранения новой роли в базе данных. Он вызывает метод store() в RoleController.
+GET /roles/{role}: Маршрут для отображения информации о конкретной роли. Он вызывает метод show($id) в RoleController.
+GET /roles/{role}/edit: Маршрут для отображения формы редактирования существующей роли. Он вызывает метод edit($id) в RoleController.
+PUT/PATCH /roles/{role}: Маршрут для обновления существующей роли в базе данных. Он вызывает метод update($id) в RoleController.
+DELETE /roles/{role}: Маршрут для удаления существующей роли из базы данных. Он вызывает метод destroy($id) в RoleController.
+Эти маршруты позволяют легко создавать, просматривать, редактировать и удалять роли в вашем приложении Laravel.
+
+47.
+Для таблицы permissions название роли и доступ
+
+php artisan make:seeder PermissionsSeeder
+
+   INFO  Seeder [database/seeders/PermissionsSeeder.php] created successfully.
+   
+
+48.
+https://spatie.be/docs/laravel-permission/v5/basic-usage/wildcard-permissions
+laravel9/database/seeders/PermissionsSeeder.php
+
+    public function run()
+    {
+        Permission::create(['name' => 'show posts']);
+        Permission::create(['name' => 'add posts']);
+        Permission::create(['name' => 'edit posts']);
+        Permission::create(['name' => 'delete posts']);
+    }
+    
+49.
+у меня через Docker так запуск seeder
+DB_HOST=E7240 php artisan db:seed --class=PermissionsSeeder
+
+   INFO  Seeding database.
+
+(у других может быть так - php artisan db:seed --class=PermissionsSeeder)
+
+В таблице - permissions появились
+--- permissions -----------------------------------------------------------
+id | name         | guard_name | created_at          | updated_at
+---------------------------------------------------------------------------
+1  | show posts   | web        | 2024-05-13 18:26:32 | 2024-05-13 18:26:32
+2  | add posts    | web        | 2024-05-13 18:26:32 | 2024-05-13 18:26:32
+3  | edit posts   | web        | 2024-05-13 18:26:32 | 2024-05-13 18:26:32
+4  | delete posts | web        | 2024-05-13 18:26:32 | 2024-05-13 18:26:32
+---------------------------------------------------------------------------
+
+50.
+Добавляем checkbox из документации
+https://getbootstrap.com/docs/4.6/components/forms/
+в laravel9/resources/views/roles/create.blade.php
+
+@foreach ($permissions as $permision)
+    <div class="form-group form-check">
+        <input type="checkbox" value="{{ $permision->id }}" class="form-check-input"
+            id="exampleCheck{{ $permision->id }}">
+        <label class="form-check-label" for="exampleCheck{{ $permision->id }}">{{ $permision->name }}</label>
+    </div>
+@endforeach
+
+51.
+laravel9/app/Http/Controllers/RoleController.php
+
+use Spatie\Permission\Models\Permission;
+
+    public function create()
+    {
+        $permissions = Permission::orderBy('name')->get();
+
+        return view('roles.create', compact([
+            'permissions'
+        ]));
+    }
+--- 
+laravel9/resources/views/roles/index.blade.php
++- строка 17    <a href="{{ route('roles.create') }}" class="btn btn-outline-success mb-4">Add new role</a>
++-23            <a href="{{ route('roles.edit', $role->id) }}" class="btn btn-outline-primary">Edit</a>
++-24            <form action="{{ route('roles.destroy', $role->id) }}" method="POST" style="display: inline-block">
+
+
+52.
+laravel9/resources/views/roles/create.blade.php
++-27                <form method="post" action="{{ route('roles.store') }}">
+---
+laravel9/resources/views/roles/create.blade.php
+прописываем массив checkbox (name="permissions[]")
++-38        <input type="checkbox" value="{{ $permision->id }}" name="permissions[]" class="form-check-input"
+
+53.
+laravel9/app/Http/Controllers/RoleController.php
+
++-30        public function store(Request $request)
+    {
+        $request->validate([
+            'name'=>'required|max:255',
+            //должно быть как минимум одно значение permissions и должно существовать в таблице permissions в поле id
+            'permissions.*'=>'required|integer|exists:permissions,id',
+        ]);
+
+        $newRole = Role::create([
+            // создаем роль с названием переданным в $request
+            'name'=>$request->name
+        ]);
+        //присваиваем все права доступа переменной permissions
+        $permissions = Permission::whereIn('id', $request->permissions)->get();
+        $newRole->syncPermissions($permissions);
+
+        return redirect()->back()->with('status', 'Role added!');
+    }
+
+54.
+
+В меню Roles добавляем Manager с правами add posts, show posts
+
+	В таблице -> roles добавилась строка с id=3
+----- roles -------------------------------------------------------------	
+id | name       | guard_name | created_at          | updated_at
+-------------------------------------------------------------------------	
+1  | super-user | web        | 2024-05-10 18:45:29 | 2024-05-10 18:45:29
+2  | user       | web        | 2024-05-13 12:01:24 | 2024-05-13 12:01:24
+3  | Manager    | web        | 2024-05-13 19:58:58 | 2024-05-13 19:58:58 <---
+-------------------------------------------------------------------------
+
+	В таблице -> role_has_permissions добавилась строки
+----- role_has_permissions ---
+permission_id | role_id      | 
+------------------------------
+1             | 3            |
+2             | 3            |
+------------------------------
+role_id=3 это в таблице roles номер 3 Manager
+permission_id 1 и 2 это в таблице permissions 1-show posts, 2-add posts 
+
+Таблица - permissions
+--- permissions -----------------------------------------------------------
+id | name         | guard_name | created_at          | updated_at
+---------------------------------------------------------------------------
+1  | show posts   | web        | 2024-05-13 18:26:32 | 2024-05-13 18:26:32
+2  | add posts    | web        | 2024-05-13 18:26:32 | 2024-05-13 18:26:32
+3  | edit posts   | web        | 2024-05-13 18:26:32 | 2024-05-13 18:26:32
+4  | delete posts | web        | 2024-05-13 18:26:32 | 2024-05-13 18:26:32
+---------------------------------------------------------------------------
+
+55.
+Убираем с видимости super-user
+laravel9/app/Http/Controllers/RoleController.php
++-14     $roles = Role::orderBy('name')->where('name','!=','super-user')->get();
+
+56.
+laravel9/resources/views/roles/edit.blade.php
+ 27               <form method="post" action="{{ route('roles.update', $role->id) }}">
+ 32               <input type="text" name="name" value="{{$role->name}}" class="form-control" id="exampleInputEmail1">
+
+
+
+57.
+Проверка роли и подстановка при редактировании Assigning Permissions to Roles
+https://spatie.be/docs/laravel-permission/v5/basic-usage/role-permissions
+
+58.
+После добавление в laravel9/resources/views/roles/edit.blade.php
++_37   <input type="checkbox" value="{{ $permision->id }}" @if($role->hasPermissionTo($permision->name)) checked @endif name="permissions[]" class="form-check-input"
+	выдало такую ошибку 
+file_put_contents(/var/www/html/storage/framework/cache/data/85/5f/855f92484c8c414d36c1b25cb24876e30229cbbf): Failed to open stream: Permission denied
+
+	+++ Разрешаем доступ - ошибка исчезла 
+sudo chmod 777 -R storage/
+
+
+59.
++++ Защита от редактирования в адресной строке
+laravel9/app/Http/Controllers/RoleController.php
+ +-59     $role=Role::where('name','!=','super-user')->findOrFail($role->id);
+ 
+ +-82   $role = Role::where('name', '!=', 'super-user')->findOrFail($role->id);
+        $role->update([
+            'name' => $request->name
+        ]);
+
+60.
+can
+https://spatie.be/docs/laravel-permission/v5/basic-usage/blade-directives
+
+laravel9/resources/views/dashboard.blade.php
+ +-17           @if(auth()->user()->can('add posts'))
+                    <a href="{{ route('add-post') }}" class="btn btn-outline-success mb-4">Add new post</a>
+                @endif
+---
+Отредактировали файл laravel9/routes/web.php               
+                
+61.
+
+!!! Добавить удаление роли
+62.
+
+https://spatie.be/docs/laravel-permission/v5/basic-usage/middleware
+
+laravel9/app/Http/Kernel.php
+'role' => \Spatie\Permission\Middlewares\RoleMiddleware::class,
+пока добавляем одну, но возможно понадобятся 3-и строки
+
+protected $routeMiddleware = [
+    // ...
+    'role' => \Spatie\Permission\Middlewares\RoleMiddleware::class,
+    'permission' => \Spatie\Permission\Middlewares\PermissionMiddleware::class,
+    'role_or_permission' => \Spatie\Permission\Middlewares\RoleOrPermissionMiddleware::class,
+];
+
+
+63.
+
+Убираем доступ к ролям всем кроме super-user (<-Admin)
+и убираем кнопку Roles
+
+laravel9/routes/web.php
+Route::resource('/roles', RoleController::class)->middleware('role:super-user');
+64.
+
+https://spatie.be/docs/laravel-permission/v5/basic-usage/blade-directives
+
+laravel9/resources/views/layouts/navigation.blade.php
++-18-22
+@role('super-user')
+    <x-nav-link :href="route('roles.index')" :active="request()->routeIs('roles.index')">
+        Roles
+    </x-nav-link>
+@endrole
+65.
+
+php artisan make:controller UserController --resource --model=User
+
+   INFO  Controller [app/Http/Controllers/UserController.php] created successfully.
+66.
+!!! Возможность добавлять нового пользователя по принципу регистрации
+
+laravel9/resources/views/users/index.blade.php
+не дорабоатно <a href="{{ route('users.create') }}" class="btn btn-outline-success mb-4">Add new user</a>
+
+67.
+
+Что бы исключить вывод super-user то в laravel9/app/Http/Controllers/UserController.php
+
+фильтрует по ролям
+
+use Spatie\Permission\Models\Role;
+
+public function index()
+{
+    $superUserRole = Role::where('name', 'super-user')->first();
+
+    $users = User::orderBy('created_at')
+                  ->whereDoesntHave('roles', function ($query) use ($superUserRole) {
+                      $query->where('role_id', $superUserRole->id);
+                  })
+                  ->get();
+
+    return view('users.index', compact('users'));
+}
+
+
+~/projects/laravel9-spatie-permission$ docker-compose up --build -d
+~/projects/laravel9-spatie-permission$ docker-compose down
+~/projects/laravel9-spatie-permission$ docker-compose up -d
+
+
+68.
+
+------------------------
+Дополнительная информация
+
+Пример, как удалить с git - read-laravel9-spatie-permission.txt
+
+git rm --cached <имя_файла> для удаления этих файлов из отслеживания,
+git rm --cached read-laravel9-spatie-permission.txt
+git rm read-laravel9-spatie-permission.txt
+
+--- удаляем из репозитория тестовый файл index.php на локальном компьютере остается
+git rm --cached index.php
+git rm index.php
+------------------------
+
+69.
+    варианты для миграции в .env
+# DB_HOST=mysqldb
+DB_HOST=E7240
+    Что бы не переключать в .env для миграций и т.д. можно сделать так 
+DB_HOST=E7240 php artisan migrate
+DB_HOST=E7240 php artisan db:seed --class=CreateSuperUserSeeder
+DB_HOST=E7240 php artisan db:seed --class=PermissionsSeeder
+DB_HOST=E7240 php artisan permission:create-role user
+
+    для работы сайта в контейнере
+DB_HOST=mysqldb
+# DB_HOST=E7240
+
+70.
+Возможные ошибки 
+
+если неправильный хост
+SQLSTATE[HY000] [2002] php_network_getaddresses: getaddrinfo for mysqldb failed: Temporary failure in name resolution (SQL: select * from `roles` where `name` = user and `guard_name` = web limit 1)
+
+ошибка доступа - решается - предоставлением доступа -> sudo chmod -R 777 storage/
+  file_put_contents(/home/aleksandr/projects/laravel9-spatie-permission/laravel9/storage/framework/cache/data/85/5f/855f92484c8c414d36c1b25cb24876e30229cbbf): Failed to open stream: Permission denied
+
+71. SQL ale3.sql есть на github содержание
+
+-- phpMyAdmin SQL Dump
+-- version 5.2.1
+-- https://www.phpmyadmin.net/
+--
+-- Хост: mysqldb
+-- Время создания: Май 14 2024 г., 15:10
+-- Версия сервера: 8.0.36
+-- Версия PHP: 8.2.8
+
+SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
+START TRANSACTION;
+SET time_zone = "+00:00";
+
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!40101 SET NAMES utf8mb4 */;
+
+--
+-- База данных: `ale3`
+--
+CREATE DATABASE IF NOT EXISTS `ale3` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+USE `ale3`;
+
+-- --------------------------------------------------------
+
+--
+-- Структура таблицы `failed_jobs`
+--
+
+CREATE TABLE `failed_jobs` (
+  `id` bigint UNSIGNED NOT NULL,
+  `uuid` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `connection` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `queue` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `payload` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `exception` longtext COLLATE utf8mb4_unicode_ci NOT NULL,
+  `failed_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Структура таблицы `migrations`
+--
+
+CREATE TABLE `migrations` (
+  `id` int UNSIGNED NOT NULL,
+  `migration` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `batch` int NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Дамп данных таблицы `migrations`
+--
+
+INSERT INTO `migrations` (`id`, `migration`, `batch`) VALUES
+(1, '2014_10_12_000000_create_users_table', 1),
+(2, '2014_10_12_100000_create_password_resets_table', 1),
+(3, '2019_08_19_000000_create_failed_jobs_table', 1),
+(4, '2019_12_14_000001_create_personal_access_tokens_table', 1),
+(5, '2024_05_10_192139_create_permission_tables', 1),
+(6, '2024_05_10_200121_create_posts_table', 2);
+
+-- --------------------------------------------------------
+
+--
+-- Структура таблицы `model_has_permissions`
+--
+
+CREATE TABLE `model_has_permissions` (
+  `permission_id` bigint UNSIGNED NOT NULL,
+  `model_type` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `model_id` bigint UNSIGNED NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Структура таблицы `model_has_roles`
+--
+
+CREATE TABLE `model_has_roles` (
+  `role_id` bigint UNSIGNED NOT NULL,
+  `model_type` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `model_id` bigint UNSIGNED NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Дамп данных таблицы `model_has_roles`
+--
+
+INSERT INTO `model_has_roles` (`role_id`, `model_type`, `model_id`) VALUES
+(1, 'App\\Models\\User', 1),
+(3, 'App\\Models\\User', 2),
+(2, 'App\\Models\\User', 3),
+(2, 'App\\Models\\User', 4);
+
+-- --------------------------------------------------------
+
+--
+-- Структура таблицы `password_resets`
+--
+
+CREATE TABLE `password_resets` (
+  `email` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `token` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Структура таблицы `permissions`
+--
+
+CREATE TABLE `permissions` (
+  `id` bigint UNSIGNED NOT NULL,
+  `name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `guard_name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Дамп данных таблицы `permissions`
+--
+
+INSERT INTO `permissions` (`id`, `name`, `guard_name`, `created_at`, `updated_at`) VALUES
+(1, 'show posts', 'web', '2024-05-13 18:26:32', '2024-05-13 18:26:32'),
+(2, 'add posts', 'web', '2024-05-13 18:26:32', '2024-05-13 18:26:32'),
+(3, 'edit posts', 'web', '2024-05-13 18:26:32', '2024-05-13 18:26:32'),
+(4, 'delete posts', 'web', '2024-05-13 18:26:32', '2024-05-13 18:26:32');
+
+-- --------------------------------------------------------
+
+--
+-- Структура таблицы `personal_access_tokens`
+--
+
+CREATE TABLE `personal_access_tokens` (
+  `id` bigint UNSIGNED NOT NULL,
+  `tokenable_type` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `tokenable_id` bigint UNSIGNED NOT NULL,
+  `name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `token` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `abilities` text COLLATE utf8mb4_unicode_ci,
+  `last_used_at` timestamp NULL DEFAULT NULL,
+  `expires_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Структура таблицы `posts`
+--
+
+CREATE TABLE `posts` (
+  `id` bigint UNSIGNED NOT NULL,
+  `name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `text` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Дамп данных таблицы `posts`
+--
+
+INSERT INTO `posts` (`id`, `name`, `text`, `created_at`, `updated_at`) VALUES
+(1, 'post1', 'textpost1', '2024-05-12 11:31:59', '2024-05-12 11:31:59'),
+(2, 'post 2123', 'text post 2123', '2024-05-12 11:55:04', '2024-05-13 15:22:19'),
+(4, 'Post 312345', 'text post 312345', '2024-05-12 14:53:11', '2024-05-13 23:42:29'),
+(6, 'post 5', 'test post 5', '2024-05-13 23:55:58', '2024-05-13 23:55:58');
+
+-- --------------------------------------------------------
+
+--
+-- Структура таблицы `roles`
+--
+
+CREATE TABLE `roles` (
+  `id` bigint UNSIGNED NOT NULL,
+  `name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `guard_name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Дамп данных таблицы `roles`
+--
+
+INSERT INTO `roles` (`id`, `name`, `guard_name`, `created_at`, `updated_at`) VALUES
+(1, 'super-user', 'web', '2024-05-10 18:45:29', '2024-05-10 18:45:29'),
+(2, 'user', 'web', '2024-05-13 12:01:24', '2024-05-13 12:01:24'),
+(3, 'Manager', 'web', '2024-05-13 19:58:58', '2024-05-13 19:58:58'),
+(4, 'Manager2', 'web', '2024-05-13 21:39:09', '2024-05-13 21:39:09'),
+(5, 'newrole', 'web', '2024-05-14 00:20:23', '2024-05-14 00:20:23');
+
+-- --------------------------------------------------------
+
+--
+-- Структура таблицы `role_has_permissions`
+--
+
+CREATE TABLE `role_has_permissions` (
+  `permission_id` bigint UNSIGNED NOT NULL,
+  `role_id` bigint UNSIGNED NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Дамп данных таблицы `role_has_permissions`
+--
+
+INSERT INTO `role_has_permissions` (`permission_id`, `role_id`) VALUES
+(1, 2),
+(2, 2),
+(1, 3),
+(2, 3),
+(3, 3),
+(1, 4),
+(2, 4),
+(1, 5),
+(2, 5),
+(3, 5);
+
+-- --------------------------------------------------------
+
+--
+-- Структура таблицы `users`
+--
+
+CREATE TABLE `users` (
+  `id` bigint UNSIGNED NOT NULL,
+  `name` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `email` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `email_verified_at` timestamp NULL DEFAULT NULL,
+  `password` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `remember_token` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Дамп данных таблицы `users`
+--
+
+INSERT INTO `users` (`id`, `name`, `email`, `email_verified_at`, `password`, `remember_token`, `created_at`, `updated_at`) VALUES
+(1, 'Admin', 'admin@gmail.com', NULL, '$2y$10$/BHvN5LWBkz4FBHt1hHcY.papDRfH.D/J7u3pUkwS/Jt6e8T4/Vle', '0nMIm5xiFUZy7uSCbpu7KHCnvl2OjE5gA8iLlBfgLHGPKPql5JBYDiLQuJui', '2024-05-10 18:45:29', '2024-05-10 18:45:29'),
+(2, 'test333', 'test@gmail.com', NULL, '$2y$10$VG8uablmBA1I9o7dz43o2Or5cd5dCtLglx1a3e0c5QHiV1uFolSLq', '029hZYxj6jwXB90mq4BsnyUR8mRSTAtfcucwJWp8pfmVpBavfftNiBomwL2X', '2024-05-13 15:25:24', '2024-05-13 23:40:00'),
+(3, 'user1', 'user1@gmail.com', NULL, '$2y$10$jRYysrjKQUpFIZLt4yDq2exCTAPlO3cADH.pMgpUa3bTp6K0MjLou', '1EzLHndJlMHh6weNE781EyeJZF4jUsbl2mZudUHrwmSZb9EcaacmoD1olcLj', '2024-05-13 23:52:28', '2024-05-13 23:52:28'),
+(4, 'user2', 'user2@gmail.com', NULL, '$2y$10$unfanMWzRL/vySfFYwA1c.KwmaqVhOaJ0rzUIYloyn.a86TBj0QFe', NULL, '2024-05-14 00:25:39', '2024-05-14 00:25:39');
+
+--
+-- Индексы сохранённых таблиц
+--
+
+--
+-- Индексы таблицы `failed_jobs`
+--
+ALTER TABLE `failed_jobs`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `failed_jobs_uuid_unique` (`uuid`);
+
+--
+-- Индексы таблицы `migrations`
+--
+ALTER TABLE `migrations`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Индексы таблицы `model_has_permissions`
+--
+ALTER TABLE `model_has_permissions`
+  ADD PRIMARY KEY (`permission_id`,`model_id`,`model_type`),
+  ADD KEY `model_has_permissions_model_id_model_type_index` (`model_id`,`model_type`);
+
+--
+-- Индексы таблицы `model_has_roles`
+--
+ALTER TABLE `model_has_roles`
+  ADD PRIMARY KEY (`role_id`,`model_id`,`model_type`),
+  ADD KEY `model_has_roles_model_id_model_type_index` (`model_id`,`model_type`);
+
+--
+-- Индексы таблицы `password_resets`
+--
+ALTER TABLE `password_resets`
+  ADD PRIMARY KEY (`email`);
+
+--
+-- Индексы таблицы `permissions`
+--
+ALTER TABLE `permissions`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `permissions_name_guard_name_unique` (`name`,`guard_name`);
+
+--
+-- Индексы таблицы `personal_access_tokens`
+--
+ALTER TABLE `personal_access_tokens`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `personal_access_tokens_token_unique` (`token`),
+  ADD KEY `personal_access_tokens_tokenable_type_tokenable_id_index` (`tokenable_type`,`tokenable_id`);
+
+--
+-- Индексы таблицы `posts`
+--
+ALTER TABLE `posts`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Индексы таблицы `roles`
+--
+ALTER TABLE `roles`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `roles_name_guard_name_unique` (`name`,`guard_name`);
+
+--
+-- Индексы таблицы `role_has_permissions`
+--
+ALTER TABLE `role_has_permissions`
+  ADD PRIMARY KEY (`permission_id`,`role_id`),
+  ADD KEY `role_has_permissions_role_id_foreign` (`role_id`);
+
+--
+-- Индексы таблицы `users`
+--
+ALTER TABLE `users`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `users_email_unique` (`email`);
+
+--
+-- AUTO_INCREMENT для сохранённых таблиц
+--
+
+--
+-- AUTO_INCREMENT для таблицы `failed_jobs`
+--
+ALTER TABLE `failed_jobs`
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT для таблицы `migrations`
+--
+ALTER TABLE `migrations`
+  MODIFY `id` int UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
+
+--
+-- AUTO_INCREMENT для таблицы `permissions`
+--
+ALTER TABLE `permissions`
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+
+--
+-- AUTO_INCREMENT для таблицы `personal_access_tokens`
+--
+ALTER TABLE `personal_access_tokens`
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT для таблицы `posts`
+--
+ALTER TABLE `posts`
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
+
+--
+-- AUTO_INCREMENT для таблицы `roles`
+--
+ALTER TABLE `roles`
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
+
+--
+-- AUTO_INCREMENT для таблицы `users`
+--
+ALTER TABLE `users`
+  MODIFY `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+
+--
+-- Ограничения внешнего ключа сохраненных таблиц
+--
+
+--
+-- Ограничения внешнего ключа таблицы `model_has_permissions`
+--
+ALTER TABLE `model_has_permissions`
+  ADD CONSTRAINT `model_has_permissions_permission_id_foreign` FOREIGN KEY (`permission_id`) REFERENCES `permissions` (`id`) ON DELETE CASCADE;
+
+--
+-- Ограничения внешнего ключа таблицы `model_has_roles`
+--
+ALTER TABLE `model_has_roles`
+  ADD CONSTRAINT `model_has_roles_role_id_foreign` FOREIGN KEY (`role_id`) REFERENCES `roles` (`id`) ON DELETE CASCADE;
+
+--
+-- Ограничения внешнего ключа таблицы `role_has_permissions`
+--
+ALTER TABLE `role_has_permissions`
+  ADD CONSTRAINT `role_has_permissions_permission_id_foreign` FOREIGN KEY (`permission_id`) REFERENCES `permissions` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `role_has_permissions_role_id_foreign` FOREIGN KEY (`role_id`) REFERENCES `roles` (`id`) ON DELETE CASCADE;
+COMMIT;
+
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
+
+
+72.
+73.
+74.
+75.
+76.
+77.
+78.
+79.
+80.
+81.
+82.
+83.
+84.
+85.
+86.
+87.
+88.
+89.
+90.
+91.
+92.
+93.
+94.
+95.
+96.
+97.
+98.
+99.
+100.
+
